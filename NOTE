@@ -1,0 +1,11 @@
+TODO
+- divide input videos into T segments of equal durations,
+  then randomly sample one frame from each segment to obtain the input sequence with T frames.
+-
+
+How to improve performance
+- 1D batch normalization
+- set stride of conv5 to 1
+- increase size of input images
+- PK batch sampling
+- combine cross-entropy and triplet loss
