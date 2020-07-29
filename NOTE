@@ -9,3 +9,19 @@ How to improve performance
 - increase size of input images
 - PK batch sampling
 - combine cross-entropy and triplet loss
+
+
+1.直接用Mining Interclass Characteristics的代码在image-reid上实验，性能变差，然后尝试了3个viewpoint作为类别中心去代替MIC中的聚类，
+  性能变差。 Viewpoint-Aware Loss（AAAI20）这篇文章的做法给人直观感觉拉大了类内差，所以需要许多个margin来权衡类间差了类内差，属于调参技
+  术活。考虑到目前image-reid性能接近饱和，能挖的有意义的问题基本挖完了，暂且不考虑这个视角问题。
+
+2.video-reid这边我先调了一个比sota差两个点的baseline。1）直接上non-local，res2net都可以提升一个点（+1%)， 2）用temporal-shift-module
+  这篇文章的方法会变差，3）STM: SpatioTemporal and Motion Encoding for Action Recognition，这篇文章的cmm（motion）模块+1%，
+  cstm（spatiotemporal）模块+0.6%。但是cstm+cmm反而比只用cmm差，4）res2net和cstm都可以提性能，所以你文章tea里的模块应该也可以提升。
+  总结起来，1）motion建模有用，这块也是video-reid研究比较少的，当前有两篇工作用optial-flow，很裸，类似LiminWang在行为识别里提出的
+  two-stream方法。这块我觉得可以做。2）当前video-reid的temporal建模也基本采用attention的方式，并且是只对最后一层输出的feature map
+  做attention进行融合，可以考虑借鉴cstm的方式设计一个block。
+
+3.需要解决的问题。1）这些模块虽然有用，但是需要针对video-reid的特定问题做模块的改进才有创新，这是我最近在实验的内容。
+  2）cstm和cmm，包括你的文章tea里面的模块都是直接代替残差模块，所以相当于没有用imageNet-pretrained的参数，
+  目前reid的数据量可能不足以训练这么大的网络，所以上述的实验结果是仅在layer2和layer3的残差模块后面接上cstm等等模块得到的，这边我也在想怎么改进。

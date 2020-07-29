@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import lib.models.resnet as lib_resnet
+import lib.model.resnet as lib_resnet
 
 
 class TemporalShift(nn.Module):

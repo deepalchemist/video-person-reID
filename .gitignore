@@ -1,3 +1,4 @@
-ckpt
-*.pyc
-.idea
+.gitignore
+NOTE
+coding.py
+run.sh

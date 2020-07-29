@@ -4,7 +4,47 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-import lib.models.resnet as lib_resnet
+import lib.model.resnet as lib_resnet
+
+
+class HierarchicalCSTM(nn.Module):
+    """Channel-wise SpatioTemporal Module"""
+
+    def __init__(self, in_channels):
+        super(HierarchicalCSTM, self).__init__()
+        self.temporal_combination_1 = nn.Conv1d(in_channels, in_channels, 3, stride=1, padding=1)
+        self.temporal_combination_2 = nn.Conv1d(in_channels, in_channels, 3, stride=1, padding=1)
+        self.temporal_combination_3 = nn.Conv1d(in_channels, in_channels, 3, stride=1, padding=1)
+
+        self.local_spatial = nn.Conv2d(in_channels, in_channels, 3, stride=1, padding=1)
+
+    def forward(self, x):
+        """
+        Args:
+            x: (b, t, c, h, w)
+            return: (b, t, c, h, w)
+        """
+
+        batch_size, t, c, h, w = x.size()
+        transpose_x = x.permute(0, 3, 4, 2, 1).contiguous()  # (b h w c t)
+        transpose_x = transpose_x.view(-1, c, t)  # (b*h*w c t)
+
+        # Hierarchical=1
+        x_1 = self.temporal_combination_1(transpose_x)  # output (b*h*w c t)
+        # Hierarchical=2
+        x_2 = self.temporal_combination_2(x_1 + transpose_x)
+        # Hierarchical=3
+        x_3 = self.temporal_combination_3(x_2 + transpose_x)
+
+        combine = x_1 + x_2 + x_3
+
+        combine = combine.view(batch_size, h, w, c, t).permute(0, 4, 3, 1, 2).contiguous()  # (b, t, c, h, w)
+        combine = combine.view(-1, c, h, w)  # (bt, c, h, w)
+
+        x = self.local_spatial(combine)  # (bt, c, h, w)
+        x = x.view(batch_size, t, c, h, w)
+
+        return x
 
 
 class CSTM(nn.Module):
@@ -82,12 +122,13 @@ class _STM(nn.Module):
         ]))
         if bn_layer:
             self.restore_dim.add_module("bn", nn.BatchNorm2d(self.in_channels))
+
         nn.init.constant_(self.restore_dim[-1].weight, 0)
         nn.init.constant_(self.restore_dim[-1].bias, 0)
         self.relu = nn.ReLU(inplace=True)
 
         if self.has_cstm:
-            self.cstm = CSTM(self.inter_channels)
+            self.cstm = HierarchicalCSTM(self.inter_channels)
         if self.has_cmm:
             self.cmm = CMM(self.inter_channels)
 
@@ -138,29 +179,30 @@ def make_stm(net, n_segment, cstm=True, cmm=False):
                       cstm=cstm, cmm=cmm)
         # ---------------------------------------------------------
         # option-1
-        tmp = [STMWrapper(block, **kwargs) for block in net.layer1]
-        net.layer1 = nn.Sequential(*tmp)
-        tmp = [STMWrapper(block, **kwargs) for block in net.layer2]
-        net.layer2 = nn.Sequential(*tmp)
-        tmp = [STMWrapper(block, **kwargs) for block in net.layer3]
-        net.layer3 = nn.Sequential(*tmp)
-        tmp = [STMWrapper(block, **kwargs) for block in net.layer4]
-        net.layer4 = nn.Sequential(*tmp)
+        # tmp = [STMWrapper(block, **kwargs) for block in net.layer1]
+        # net.layer1 = nn.Sequential(*tmp)
+        # tmp = [STMWrapper(block, **kwargs) for block in net.layer2]
+        # net.layer2 = nn.Sequential(*tmp)
+        # tmp = [STMWrapper(block, **kwargs) for block in net.layer3]
+        # net.layer3 = nn.Sequential(*tmp)
+        # tmp = [STMWrapper(block, **kwargs) for block in net.layer4]
+        # net.layer4 = nn.Sequential(*tmp)
+
         # ---------------------------------------------------------
         # option-2
-        # net.layer2 = nn.Sequential(
-        #     STMWrapper(net.layer2[0], **kwargs),
-        #     net.layer2[1],
-        #     STMWrapper(net.layer2[2], **kwargs),
-        #     net.layer2[3],
-        # )
-        # net.layer3 = nn.Sequential(
-        #     STMWrapper(net.layer3[0], **kwargs),
-        #     net.layer3[1],
-        #     STMWrapper(net.layer3[2], **kwargs),
-        #     net.layer3[3],
-        #     STMWrapper(net.layer3[4], **kwargs),
-        #     net.layer3[5],
-        # )
+        net.layer2 = nn.Sequential(
+            STMWrapper(net.layer2[0], **kwargs),
+            net.layer2[1],
+            STMWrapper(net.layer2[2], **kwargs),
+            net.layer2[3],
+        )
+        net.layer3 = nn.Sequential(
+            STMWrapper(net.layer3[0], **kwargs),
+            net.layer3[1],
+            STMWrapper(net.layer3[2], **kwargs),
+            net.layer3[3],
+            STMWrapper(net.layer3[4], **kwargs),
+            net.layer3[5],
+        )
     else:
         raise NotImplementedError
